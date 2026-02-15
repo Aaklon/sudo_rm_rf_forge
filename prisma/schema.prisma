@@ -14,12 +14,15 @@ datasource db {
 }
 
 model User {
-  id         String @id @default(uuid())
+  id         String     @id @default(uuid())
   name       String
-  email      String @unique
-  rollNumber String @unique
-  password   String @map("password_hash") // Storing bcrypt hash
+  email      String     @unique
+  rollNumber String     @unique
+  password   String     @map("password_hash")
+  role       String     @default("student")
   seats      Seat[]
+  bookings   Booking[]
+  entryLogs  EntryLog[]
 }
 
 model Seat {
@@ -31,4 +34,29 @@ model Seat {
   status             String    @default("FREE")
   bookedByRollNumber String?
   bookedBy           User?     @relation(fields: [bookedByRollNumber], references: [rollNumber])
+  bookings           Booking[]
+}
+
+model Booking {
+  id         String   @id @default(uuid())
+  seatNumber String
+  seat       Seat     @relation(fields: [seatNumber], references: [seatNumber])
+  rollNumber String
+  user       User     @relation(fields: [rollNumber], references: [rollNumber])
+  startTime  DateTime
+  endTime    DateTime
+  duration   Int
+  status     String
+  xpEarned   Int      @default(0)
+  createdAt  DateTime @default(now())
+}
+
+model EntryLog {
+  id         String    @id @default(uuid())
+  rollNumber String
+  user       User      @relation(fields: [rollNumber], references: [rollNumber])
+  seatNumber String?
+  entryTime  DateTime  @default(now())
+  exitTime   DateTime?
+  createdAt  DateTime  @default(now())
 }

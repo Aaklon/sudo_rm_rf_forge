@@ -1,0 +1,8 @@
+{
+  "openingTime": "08:00",
+  "closingTime": "22:00",
+  "maxBookingDuration": 120,
+  "minBookingDuration": 15,
+  "graceMinutes": 5,
+  "noShowPenaltyXP": -50
+}

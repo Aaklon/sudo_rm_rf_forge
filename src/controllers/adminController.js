@@ -1,6 +1,8 @@
 const prisma = require("../lib/prisma");
+const { getConfig, updateConfig } = require("../lib/configLoader");
 
-exports.validateEntry = async (req, res) => {
+// Barcode scan - handles both entry and exit
+exports.barcodeScan = async (req, res) => {
   try {
     const { rollNumber } = req.body;
 
@@ -8,16 +10,89 @@ exports.validateEntry = async (req, res) => {
       return res.status(400).json({ error: "Roll number is required" });
     }
 
-    // Find pending booking for this roll number
-    const booking = await prisma.seat.findFirst({
+    // Check if user exists
+    const user = await prisma.user.findUnique({
+      where: { rollNumber },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Check for open entry (no exit yet) → mark exit
+    const openEntry = await prisma.entryLog.findFirst({
+      where: {
+        rollNumber,
+        exitTime: null,
+      },
+      orderBy: { entryTime: "desc" },
+    });
+
+    if (openEntry) {
+      // Mark exit
+      const now = new Date();
+      const updatedLog = await prisma.entryLog.update({
+        where: { id: openEntry.id },
+        data: { exitTime: now },
+      });
+
+      // Calculate duration
+      const durationMs = now - new Date(openEntry.entryTime);
+      const durationMins = Math.floor(durationMs / 60000);
+
+      // If there's an active seat, free it and log the booking
+      const activeSeat = await prisma.seat.findFirst({
+        where: {
+          bookedByRollNumber: rollNumber,
+          status: "ACTIVE",
+        },
+      });
+
+      if (activeSeat) {
+        // Create completed booking record
+        await prisma.booking.create({
+          data: {
+            seatNumber: activeSeat.seatNumber,
+            rollNumber,
+            startTime: activeSeat.startTime || openEntry.entryTime,
+            endTime: now,
+            duration: durationMins,
+            status: "COMPLETED",
+            xpEarned: Math.floor(durationMins),
+          },
+        });
+
+        // Free the seat
+        await prisma.seat.update({
+          where: { id: activeSeat.id },
+          data: {
+            status: "FREE",
+            bookedByRollNumber: null,
+            startTime: null,
+            expiryTime: null,
+          },
+        });
+      }
+
+      return res.json({
+        action: "EXIT",
+        message: `Exit recorded for ${user.name}`,
+        log: updatedLog,
+        duration: durationMins,
+        seatNumber: activeSeat?.seatNumber || openEntry.seatNumber,
+      });
+    }
+
+    // No open entry → check for pending booking → mark entry
+    const pendingBooking = await prisma.seat.findFirst({
       where: {
         bookedByRollNumber: rollNumber,
         status: "PENDING",
       },
     });
 
-    if (!booking) {
-      // Check if they have an active booking
+    if (!pendingBooking) {
+      // Check if they have an active booking already
       const activeBooking = await prisma.seat.findFirst({
         where: {
           bookedByRollNumber: rollNumber,
@@ -26,12 +101,10 @@ exports.validateEntry = async (req, res) => {
       });
 
       if (activeBooking) {
-        return res
-          .status(400)
-          .json({
-            error: "User already has an active session.",
-            booking: activeBooking,
-          });
+        return res.status(400).json({
+          error: "User already has an active session",
+          seat: activeBooking,
+        });
       }
 
       return res
@@ -39,85 +112,176 @@ exports.validateEntry = async (req, res) => {
         .json({ error: "No pending booking found for this roll number" });
     }
 
-    // Update to ACTIVE/COMPLETED
-    // User said: "update the status to completed and expiry time as per the time he previously entered"
-    // AND "unable to comes atleast 5 mins before the start time... removes the seats"
+    // Activate the seat
+    await prisma.seat.update({
+      where: { id: pendingBooking.id },
+      data: { status: "ACTIVE" },
+    });
 
-    // So if they are here, they are validating.
-    // We update status to ACTIVE (or COMPLETED? User said COMPLETED).
-    // Let's use ACTIVE to match previous logic slightly, or COMPLETED if that's what they want.
-    // User said "update the status to completed".
-
-    // We also need to set the REAL expiry time.
-    // In bookSeat, we set expiryTime = startTime (as the "cancel if not here by" time).
-    // Now we need to extend it to the full duration.
-
-    // Wait, where is duration stored?
-    // I didn't store duration in the DB. I only stored startTime and expiryTime.
-    // I need to either store duration or calculating it.
-    // If I didn't store duration, I can't know when it should expire.
-    // The user said "expiry time as per the time he previously entered".
-    // I should probably have stored the *intended* expiry time or duration.
-
-    // Quick fix: Add `duration` to Seat model? Or just `intendedExpiryTime`?
-    // Or just store the final expiry time in `expiryTime` and use a different field for "cancellation time"?
-    // Or just trust that `expiryTime` was set correctly?
-    // In bookSeat, I set `expiryTime = startTime`.
-    // If I change it now, I need to know the duration.
-
-    // Let's assume the user sends duration again? No, that's insecure.
-    // I should have stored `duration` in the Seat model or `intendedExpiryTime`.
-
-    // Current Schema:
-    // startTime, expiryTime, status.
-
-    // I'll update schema to add `duration` (Int, minutes) to Seat to make this robust.
-    // But I entered Execution mode already.
-    // If I change schema again, I need another migration.
-    // Is there another way?
-    // Maybe `expiryTime` IS the intended end time.
-    // And `startTime` is the start time.
-    // The cron job checks strictly: If (CurrentTime > StartTime + 5 mins) AND Status == PENDING -> Cancel.
-    // In that case, I can store the REAL expiry time in `expiryTime` from the beginning.
-    // And the unique condition for cancellation is: Status is PENDING and Time > StartTime + Buffer.
-
-    // YES. This is better. I don't need a new schema field if I use the logic:
-    // "Cancel if PENDING and CurrentTime > StartTime + 5 mins".
-    // Then `expiryTime` can just be the actual end of the session.
-
-    // So, in bookSeat, I should set:
-    // startTime = requested start time
-    // expiryTime = requested start time + duration
-
-    // And validation just flips status to COMPLETED/ACTIVE.
-
-    // Refactoring bookSeat logic in my head:
-    // bookSeat: values { status: "PENDING", startTime: X, expiryTime: X + Duration }
-    // Cron: findMany({ where: { status: "PENDING", startTime: { lt: Now - 5mins } } }) -> update to FREE.
-
-    // Admin Validation:
-    // just update status to "ACTIVE" (or COMPLETED).
-
-    // So I need to:
-    // 1. Update `bookSeat` in `bookingController.js` to set correct `expiryTime`.
-    // 2. Implement `validateEntry` here.
-
-    // Let's update `bookSeat` in the next step.
-
-    const updatedSeat = await prisma.seat.update({
-      where: { id: booking.id },
+    // Create entry log
+    const entryLog = await prisma.entryLog.create({
       data: {
-        status: "ACTIVE", // Using ACTIVE to imply they are currently occupying the seat.
-        // If "COMPLETED" means "Session Finished", then we should use ACTIVE now and COMPLETED later?
-        // User said: "update the status to completed... if the user is unable to comes ... remove"
-        // "completed" might mean "Booking Process Completed, User is here".
-        // I will use "ACTIVE" as it matches `getBookingStatus` looking for ACTIVE.
+        rollNumber,
+        seatNumber: pendingBooking.seatNumber,
       },
     });
 
-    res.json({ message: "Entry validated", seat: updatedSeat });
+    return res.json({
+      action: "ENTRY",
+      message: `Entry recorded for ${user.name}`,
+      log: entryLog,
+      seatNumber: pendingBooking.seatNumber,
+      seatFloor: pendingBooking.floorNumber,
+    });
   } catch (error) {
-    console.error("Validation error:", error);
+    console.error("Barcode scan error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Free all seats
+exports.freeAllSeats = async (req, res) => {
+  try {
+    const bookedSeats = await prisma.seat.findMany({
+      where: { status: { not: "FREE" } },
+    });
+
+    // Log all active/pending as cancelled
+    for (const seat of bookedSeats) {
+      if (seat.bookedByRollNumber) {
+        await prisma.booking.create({
+          data: {
+            seatNumber: seat.seatNumber,
+            rollNumber: seat.bookedByRollNumber,
+            startTime: seat.startTime || new Date(),
+            endTime: new Date(),
+            duration: 0,
+            status: "ADMIN_FREED",
+            xpEarned: 0,
+          },
+        });
+      }
+    }
+
+    // Close any open entry logs
+    await prisma.entryLog.updateMany({
+      where: { exitTime: null },
+      data: { exitTime: new Date() },
+    });
+
+    // Free all seats
+    await prisma.seat.updateMany({
+      data: {
+        status: "FREE",
+        bookedByRollNumber: null,
+        startTime: null,
+        expiryTime: null,
+      },
+    });
+
+    res.json({
+      message: "All seats freed",
+      freedCount: bookedSeats.length,
+    });
+  } catch (error) {
+    console.error("Free all seats error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Get library config
+exports.getLibraryConfig = async (req, res) => {
+  try {
+    const config = getConfig();
+    res.json({ config });
+  } catch (error) {
+    console.error("Get config error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Update library config
+exports.updateLibraryConfig = async (req, res) => {
+  try {
+    const updates = req.body;
+    const updated = updateConfig(updates);
+    res.json({ message: "Config updated", config: updated });
+  } catch (error) {
+    console.error("Update config error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Get entry/exit logs
+exports.getEntryLogs = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    const [logs, total] = await Promise.all([
+      prisma.entryLog.findMany({
+        orderBy: { entryTime: "desc" },
+        skip,
+        take: limit,
+        include: {
+          user: {
+            select: { name: true, email: true, rollNumber: true },
+          },
+        },
+      }),
+      prisma.entryLog.count(),
+    ]);
+
+    res.json({ logs, total, page, totalPages: Math.ceil(total / limit) });
+  } catch (error) {
+    console.error("Get entry logs error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Get all bookings (admin view)
+exports.getAllBookings = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const skip = (page - 1) * limit;
+
+    const [bookings, total] = await Promise.all([
+      prisma.booking.findMany({
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          user: {
+            select: { name: true, email: true, rollNumber: true },
+          },
+        },
+      }),
+      prisma.booking.count(),
+    ]);
+
+    res.json({ bookings, total, page, totalPages: Math.ceil(total / limit) });
+  } catch (error) {
+    console.error("Get all bookings error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Get all seats (admin view)
+exports.getAllSeatsAdmin = async (req, res) => {
+  try {
+    const seats = await prisma.seat.findMany({
+      orderBy: { seatNumber: "asc" },
+      include: {
+        bookedBy: {
+          select: { name: true, email: true, rollNumber: true },
+        },
+      },
+    });
+    res.json({ seats });
+  } catch (error) {
+    console.error("Get seats admin error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };

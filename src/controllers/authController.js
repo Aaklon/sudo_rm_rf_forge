@@ -99,6 +99,7 @@ exports.login = async (req, res) => {
         name: user.name,
         email: user.email,
         rollNumber: user.rollNumber,
+        role: user.role,
       },
     });
   } catch (error) {
@@ -110,4 +111,29 @@ exports.login = async (req, res) => {
 exports.logout = (req, res) => {
   res.clearCookie("token");
   res.json({ message: "Logout successful" });
+};
+
+exports.getMe = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        rollNumber: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ user });
+  } catch (error) {
+    console.error("GetMe error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 };
