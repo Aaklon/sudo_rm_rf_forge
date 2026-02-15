@@ -231,7 +231,7 @@ img {
 
 .navbar.scrolled {
   padding: var(--spacing-sm) 0;
-  background: rgba(10, 14, 39, 0.95);
+  background: var(--bg-secondary);
   box-shadow: var(--shadow-md);
 }
 
