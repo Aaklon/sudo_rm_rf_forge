@@ -3,6 +3,7 @@ import Navbar from '../components/Navbar';
 import { useAuth } from '../contexts/AuthContext';
 import seatService from '../services/seatService';
 import bookingService from '../services/bookingService';
+import { SeatSkeleton, SidebarSkeleton, StatsCardSkeleton } from '../components/SkeletonLoaders';
 
 const Dashboard = () => {
   const { currentUser, userProfile } = useAuth();
@@ -13,6 +14,8 @@ const Dashboard = () => {
   const [activeBooking, setActiveBooking] = useState(null);
   const [selectedSeat, setSelectedSeat] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   const [bookingForm, setBookingForm] = useState({
     startTime: '',
@@ -29,7 +32,17 @@ const Dashboard = () => {
     loadBookings();
     checkActiveBooking();
 
-    return () => unsubscribe();
+    // Scroll detection
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 300);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   const loadBookings = async () => {
@@ -52,9 +65,36 @@ const Dashboard = () => {
   };
 
   const getFilteredSeats = () => {
-    if (filter === 'all') return seats;
-    if (filter === 'available') return seats.filter(s => s.status === 'available');
-    return seats.filter(s => s.type === filter);
+    let filtered = seats;
+    
+    // Apply filter
+    if (filter === 'available') {
+      filtered = filtered.filter(s => s.status === 'available');
+    } else if (filter !== 'all') {
+      filtered = filtered.filter(s => s.type === filter);
+    }
+    
+    // Apply search
+    if (searchQuery) {
+      filtered = filtered.filter(s => 
+        s.id.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    return filtered;
+  };
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const quickBookAvailable = () => {
+    const availableSeats = seats.filter(s => s.status === 'available');
+    if (availableSeats.length > 0) {
+      handleSeatClick(availableSeats[0]);
+    } else {
+      alert('No seats available at the moment');
+    }
   };
 
   const getCounts = () => ({
@@ -136,8 +176,32 @@ const Dashboard = () => {
     return (
       <>
         <Navbar isAuthenticated={true} />
-        <div className="container" style={{ paddingTop: '120px', textAlign: 'center' }}>
-          <p>Loading...</p>
+        <div className="dashboard-layout">
+          <SidebarSkeleton />
+          
+          <div className="container" style={{ paddingTop: '120px', paddingBottom: '60px' }}>
+            {/* Quick Stats Banner Skeleton */}
+            <div className="glass-panel" style={{ marginBottom: '24px', padding: '20px' }}>
+              <div className="flex justify-between items-center">
+                <div style={{ flex: 1 }}>
+                  <div className="skeleton" style={{ width: '200px', height: '24px', marginBottom: '12px' }} />
+                  <div className="skeleton" style={{ width: '150px', height: '16px' }} />
+                </div>
+                <div className="flex gap-2">
+                  <div className="skeleton" style={{ width: '80px', height: '36px', borderRadius: '8px' }} />
+                  <div className="skeleton" style={{ width: '80px', height: '36px', borderRadius: '8px' }} />
+                  <div className="skeleton" style={{ width: '80px', height: '36px', borderRadius: '8px' }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Seat Grid Skeleton */}
+            <div className="seat-grid">
+              {[...Array(20)].map((_, i) => (
+                <SeatSkeleton key={i} />
+              ))}
+            </div>
+          </div>
         </div>
       </>
     );
@@ -151,6 +215,38 @@ const Dashboard = () => {
       <Navbar isAuthenticated={true} />
       
       <div className="container" style={{ paddingTop: '120px', paddingBottom: '60px' }}>
+        {/* Quick Stats Banner */}
+        <div className="quick-stats-banner">
+          <div className="quick-stat-item">
+            <div className="quick-stat-icon">⚡</div>
+            <div className="quick-stat-content">
+              <span className="quick-stat-value text-primary">{counts.available}</span>
+              <span className="quick-stat-label">Available</span>
+            </div>
+          </div>
+          <div className="quick-stat-item">
+            <div className="quick-stat-icon">🎯</div>
+            <div className="quick-stat-content">
+              <span className="quick-stat-value text-teal">{userProfile?.stats?.level || 1}</span>
+              <span className="quick-stat-label">Level</span>
+            </div>
+          </div>
+          <div className="quick-stat-item">
+            <div className="quick-stat-icon">🏆</div>
+            <div className="quick-stat-content">
+              <span className="quick-stat-value text-gold">{userProfile?.stats?.xp || 0}</span>
+              <span className="quick-stat-label">Total XP</span>
+            </div>
+          </div>
+          <div className="quick-stat-item">
+            <div className="quick-stat-icon">📚</div>
+            <div className="quick-stat-content">
+              <span className="quick-stat-value text-secondary">{userProfile?.stats?.totalBookings || 0}</span>
+              <span className="quick-stat-label">Bookings</span>
+            </div>
+          </div>
+        </div>
+
         {activeBooking && (
           <div style={{ background: 'var(--gradient-primary)', padding: '20px', borderRadius: 'var(--radius-lg)', marginBottom: '24px', color: 'white' }}>
             <h3 style={{ marginBottom: '8px', color: 'white' }}>Session Active</h3>
@@ -162,8 +258,23 @@ const Dashboard = () => {
         )}
 
         <div className="glass-panel" style={{ marginBottom: '24px' }}>
-          <h2>Available Seats</h2>
-          <div className="flex gap-2" style={{ marginTop: '16px' }}>
+          <div className="flex justify-between items-center flex-wrap gap-4">
+            <h2>Available Seats</h2>
+            
+            {/* Search Bar */}
+            <div className="search-bar">
+              <span className="search-icon">🔍</span>
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search seat number..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-2" style={{ marginTop: '16px', flexWrap: 'wrap' }}>
             {['all', 'available', 'standard', 'stand', 'pod'].map(f => (
               <button key={f} onClick={() => setFilter(f)} className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-secondary'}`}>
                 {f.charAt(0).toUpperCase() + f.slice(1)} ({counts[f]})
@@ -179,7 +290,44 @@ const Dashboard = () => {
             </div>
           ))}
         </div>
+        
+        {filteredSeats.length === 0 && (
+          <div className="glass-panel text-center" style={{ marginTop: '40px' }}>
+            <h3>No seats found</h3>
+            <p className="text-muted">Try adjusting your filters or search query</p>
+          </div>
+        )}
       </div>
+
+      {/* Quick Actions */}
+      <div className="quick-actions">
+        <button 
+          className="quick-action-btn" 
+          onClick={quickBookAvailable}
+          title="Quick Book"
+        >
+          <span className="tooltip">Quick Book</span>
+          ⚡
+        </button>
+        <button 
+          className="quick-action-btn" 
+          onClick={() => setFilter('available')}
+          style={{ background: 'var(--gradient-secondary)' }}
+          title="Show Available"
+        >
+          <span className="tooltip">Show Available</span>
+          🎯
+        </button>
+      </div>
+
+      {/* Scroll to Top */}
+      <button 
+        className={`scroll-to-top ${showScrollTop ? 'visible' : ''}`}
+        onClick={scrollToTop}
+        style={{ bottom: '100px' }}
+      >
+        ↑
+      </button>
 
       {showBookingModal && (
         <div className="modal-overlay" onClick={() => setShowBookingModal(false)}>
