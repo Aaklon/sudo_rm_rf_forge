@@ -6,12 +6,12 @@ const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"; // TODO: Move to
 
 exports.signup = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, rollNumber } = req.body;
 
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !rollNumber) {
       return res
         .status(400)
-        .json({ error: "Name, email, and password are required" });
+        .json({ error: "Name, email, password, and roll number are required" });
     }
 
     const existingUser = await prisma.user.findUnique({
@@ -29,6 +29,7 @@ exports.signup = async (req, res) => {
       data: {
         name,
         email,
+        rollNumber,
         password: passwordHash,
       },
     });
@@ -43,12 +44,15 @@ exports.signup = async (req, res) => {
       maxAge: 3600000, // 1 hour
     });
 
-    res
-      .status(201)
-      .json({
-        message: "User created successfully",
-        user: { id: user.id, name: user.name, email: user.email },
-      });
+    res.status(201).json({
+      message: "User created successfully",
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        rollNumber: user.rollNumber,
+      },
+    });
   } catch (error) {
     console.error("Signup error:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -89,7 +93,13 @@ exports.login = async (req, res) => {
 
     res.json({
       message: "Login successful",
-      user: { id: user.id, name: user.name, email: user.email },
+      token, // Return token for API clients
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        rollNumber: user.rollNumber,
+      },
     });
   } catch (error) {
     console.error("Login error:", error);

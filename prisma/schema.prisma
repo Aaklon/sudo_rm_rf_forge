@@ -9,29 +9,26 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id       String @id @default(uuid())
-  name     String
-  email    String @unique
-  password String @map("password_hash") // Storing bcrypt hash
-  seats    Seat[]
+  id         String @id @default(uuid())
+  name       String
+  email      String @unique
+  rollNumber String @unique
+  password   String @map("password_hash") // Storing bcrypt hash
+  seats      Seat[]
 }
 
 model Seat {
-  id          String    @id @default(uuid())
-  seatNumber  String    @unique
-  floorNumber Int
-  expiryTime  DateTime
-  status      Status    @default(FREE)
-  userId      String?
-  bookedBy    User?     @relation(fields: [userId], references: [id])
-}
-
-enum Status {
-  ACTIVE
-  PENDING
-  FREE
+  id                 String    @id @default(uuid())
+  seatNumber         String    @unique
+  floorNumber        Int
+  startTime          DateTime?
+  expiryTime         DateTime?
+  status             String    @default("FREE")
+  bookedByRollNumber String?
+  bookedBy           User?     @relation(fields: [bookedByRollNumber], references: [rollNumber])
 }

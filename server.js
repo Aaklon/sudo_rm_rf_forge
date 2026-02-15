@@ -6,6 +6,12 @@ require("dotenv").config();
 const authRoutes = require("./src/routes/authRoutes");
 const authMiddleware = require("./src/middleware/authMiddleware");
 
+const bookingRoutes = require("./src/routes/bookingRoutes");
+const adminRoutes = require("./src/routes/adminRoutes");
+
+// Start Cron Job
+require("./src/cron");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -15,6 +21,8 @@ app.use(cookieParser());
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/bookings", bookingRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Example protected route
 app.get("/api/protected", authMiddleware, (req, res) => {
