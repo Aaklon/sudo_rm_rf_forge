@@ -181,17 +181,31 @@ const Dashboard = () => {
           
           <div className="container" style={{ paddingTop: '120px', paddingBottom: '60px' }}>
             {/* Quick Stats Banner Skeleton */}
-            <div className="glass-panel" style={{ marginBottom: '24px', padding: '20px' }}>
-              <div className="flex justify-between items-center">
-                <div style={{ flex: 1 }}>
-                  <div className="skeleton" style={{ width: '200px', height: '24px', marginBottom: '12px' }} />
-                  <div className="skeleton" style={{ width: '150px', height: '16px' }} />
+            <div className="quick-stats-banner dashboard-skeleton-quick-stats">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="quick-stat-item dashboard-skeleton-quick-stat">
+                  <div className="skeleton dashboard-skeleton-stat-icon" />
+                  <div className="quick-stat-content dashboard-skeleton-stat-content">
+                    <div className="skeleton dashboard-skeleton-stat-value" />
+                    <div className="skeleton dashboard-skeleton-stat-label" />
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <div className="skeleton" style={{ width: '80px', height: '36px', borderRadius: '8px' }} />
-                  <div className="skeleton" style={{ width: '80px', height: '36px', borderRadius: '8px' }} />
-                  <div className="skeleton" style={{ width: '80px', height: '36px', borderRadius: '8px' }} />
+              ))}
+            </div>
+
+            {/* Filters/Search Skeleton */}
+            <div className="glass-panel dashboard-skeleton-filters" style={{ marginBottom: '24px' }}>
+              <div className="flex justify-between items-center flex-wrap gap-4">
+                <div className="skeleton dashboard-skeleton-heading" />
+                <div className="dashboard-skeleton-search">
+                  <div className="skeleton dashboard-skeleton-search-icon" />
+                  <div className="skeleton dashboard-skeleton-search-input" />
                 </div>
+              </div>
+              <div className="dashboard-skeleton-filter-row">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div key={index} className="skeleton dashboard-skeleton-filter-pill" />
+                ))}
               </div>
             </div>
 

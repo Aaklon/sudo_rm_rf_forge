@@ -789,6 +789,124 @@ img {
   border-radius: var(--radius-md);
 }
 
+/* Dashboard skeleton layout */
+.dashboard-skeleton-quick-stats {
+  align-items: stretch;
+}
+
+.dashboard-skeleton-quick-stat {
+  align-items: center;
+}
+
+.dashboard-skeleton-stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+}
+
+.dashboard-skeleton-stat-content {
+  gap: 6px;
+}
+
+.dashboard-skeleton-stat-value {
+  width: 60px;
+  height: 22px;
+}
+
+.dashboard-skeleton-stat-label {
+  width: 80px;
+  height: 12px;
+}
+
+.dashboard-skeleton-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-skeleton-heading {
+  width: 180px;
+  height: 26px;
+}
+
+.dashboard-skeleton-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  min-width: 260px;
+}
+
+.dashboard-skeleton-search-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+
+.dashboard-skeleton-search-input {
+  flex: 1;
+  height: 16px;
+}
+
+.dashboard-skeleton-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dashboard-skeleton-filter-pill {
+  width: 110px;
+  height: 30px;
+  border-radius: var(--radius-full);
+}
+
+@media (max-width: 1024px) {
+  .dashboard-skeleton-heading {
+    width: 160px;
+  }
+
+  .dashboard-skeleton-filter-pill {
+    width: 96px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-skeleton-quick-stat {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .dashboard-skeleton-filters .flex {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dashboard-skeleton-search {
+    width: 100%;
+  }
+
+  .dashboard-skeleton-filter-pill {
+    width: 90px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-skeleton-stat-value {
+    width: 48px;
+  }
+
+  .dashboard-skeleton-stat-label {
+    width: 70px;
+  }
+
+  .dashboard-skeleton-filter-pill {
+    width: 100%;
+  }
+}
+
 @keyframes skeleton-loading {
   0% {
     background-position: 200% 0;
